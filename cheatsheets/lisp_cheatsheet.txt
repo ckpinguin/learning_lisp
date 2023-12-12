@@ -1,0 +1,761 @@
+Hier einige best-practices, weil es manchmal schwierig ist, die richtige Funktion/Makro zu wählen, denn es gibt vielfach verschiedene Möglichkeiten, etwas zu erreichen (und dennoch sind alle etwas anders...)
+
+
+DEBUG
+=====
+-sdraw (muss geladen werden): Paket, dass beim Visualisieren von Listen und Cons hilft:
+  - sdraw(x) => zeigt eine ASCII-Grafik der Liste
+  - sdraw-loop => bleibt aktiv (REPL)
+  - scrawl => interaktiv, man kann durch die Konstrukte "krabbeln"
+- step => Schrittweises ausführen, sehr lehrreich
+- trace => eingebaute Funktion, die Trace möglich macht => (trace funkname) um einzuschalten und (untrace funkname) um auszuschalten.
+- dtrace (muss geladen werden) => Paket, dass mehr Details als trace zeigt => (dtrace funkname) um einzuschalten und (untrace funkname) um auszuschalten.
+- time => misst reale und cpu-zeit eines Ausdrucks
+- break => Anweisung, die ein Programm unternbricht und in den Debugger wechselt, das Programm kann danach wieder fortgesetzt werden.
+- error / warning => Bei error bricht das Programm ab oder wechselt in den Debugger (je nach CL-Implementation), es kann danach nicht mehr fortgesetzt werden. Mit warning können Warnmeldungen ausgegeben werden ohne den Programmfluss zu unterbrechen.
+- describe => Zeigt Details über Typen / Datenstrukturen
+- inspect => Zeigt interne Details <= sehr praktisch!
+- gc => garbage collect
+- room => Zeigt die aktuelle Memoryverwendung
+- ppmx (muss geladen werden) => "Pretty Print Macro eXpansion": zeigt, wie das Makro expandiert
+
+SYMBOLE
+=======
+Symbole sind Blöcke mit 5 Zeigern (Name, Wert, Funktion, property list etc.) Symbole können für verschiedenes stehen (auch gleichzeitig). Man kann die Informationen über sie wie folgt erhalten:
+- symbol-name => Gibt den Name für das Symbol aus (das Symbol selbst).
+- symbol-value => Gibt den Wert für das Symbol aus (das Symbol ist also eine Variable und zeigt auf die Speicherstelle in der ihr Wert gespeichert ist).
+- symbol-function => Gibt die Funktion für das Symbol aus.
+- symbol-macro => dito für Makros.
+
+
+LISTEN
+======
+- dolist (Makro) => Loopt über eine Liste, hier ein Beispiel für die formatierte Ausgabe einer Datenbank: 
+(dolist (cd *db*)
+  (format "~*{a:~10t~a~%~}~%" cd))
+- cons => Konstruiert zwei Zellen zu einem Konstrukt. Wenn die zweite Zelle (cdr) auf nil zeigt, handelt sich um das Ende einer Liste. Für Glieder einer verketteten Liste gilt: die zweite Teilzelle zeigt auf das nächste Glied, die erste Teilzelle zeigt auf Daten oder eine weitere Unter-liste (bei nested lists).
+Cons-Zellen, in denen die zweite Teilzelle nicht auf eine andere Zelle oder nil zeigt, sondern auf Daten, werden beispielsweise in alists verwendet (siehe den entsprechenden Abschnitt über Datenstrukturen). Sie werden als (one . two) wiedergegeben von Lisp, damit man sie gut erkennt.
+*** Zirkuläre Listen ***
+Wenn die letzte Teilzelle einer Liste auf den Listenanfang derselben Liste zeigt, hat man eine zirkuläre Liste. Man sollte vorher immer *print-circle* auf true setzen, sonst bleiben die meisten Lisp-Implementationen hängen, da sie nach der Zuweisung die Liste ausdrucken wollen:
+(setf foo '(1 2 3))
+(setf *print-circle* t)
+(setf (cdddr foo) foo)
+=> #1=(1 2 3 . #1#)
+
+INPUT / OUTPUT
+==============
+- format => ist so ziemlich die wichtigste Funktion, wenn man Daten lesen und schreiben will. Sie nimmt ähnlich wie ihre printf etc. Pendants Formatstrings entgegen (siehe spezifische Doku).
+Hier aus Wikipedia:
+(format t "Color ~A, number1 ~D, number2 ~5,'0d, hex ~X, float ~5,2F, unsigned value ~D.~%"
+             "red" 123456 89 255 3.14 250)
+ ⇒ Color red, number1 123456, number2 00089, hex FF, float  3.14, unsigned value 250.
+Zusätzlich noch ~S für ein beliebiges Symbol. ~% ist ein Newline, ~& wird nur dann ein Newline, wenn die vorherige Linie kein Newline gemacht hat (sehr praktisch und clever).s
+- prinX => es gibt diverse Versionen von print-Funktionen, man sollte jedoch wenn immer möglich format verwenden.
+Hier ein schönes Beispiel, wie man format einsetzen kann, Funktionen, um ein Tic-Tac-Toe-Board anzuzeigen:
+(defun print-board (b)
+  (let ((b2 (sublis ’((x   . "X")
+                      (o   . "O")
+                      (nil . " "))
+             b)))
+  (format t "~&")
+  (print-line b2)
+  (format t "-----------~%")
+  (print-line (nthcdr 3 b2))
+  (format t "-----------~%")
+  (print-line (nthcdr 6 b2))))
+
+(defun print-line (line)
+  (format t " ~A | ~A | ~A~%"
+  (first line)
+  (second line)
+  (third line)))
+- read
+- yes-or-no-p (je nach Implementierung auch y-or-n-p) => Standarddialog ja/nein, um im Kontrollfluss entsprechend weiterzufahren. Nimmt die auszugebende Frage entgegen. Wird meist nach einem if benutzt.
+
+Ausgabefunktionen
+=================
+- print => Gibt vor dem Inhalt eine Leerzeile aus und danach ein Leerzeichen.
+- prin1 => Wie print, aber ohne Leerzeile u.ä., nutzbar z.B. für Lesen mittels "read"
+- princ => Wie prin1, aber ohne Escape-Sequenzen für Sonderzeichen u.ä.
+- pprint => "pretty print", wie print, aber ohne Leerzeichen am Ende
+- prin1-to-string / princ-to-string => Gibt einen entsprechend formatierten String zurück
+- write => die grundsätzliche Ausgabefunktion von Lisp. Nur in Ausnahmefällen benötigt
+- write-char => Gibt ein einzelnes Zeichen aus als Char
+- terpri => "terminal print", gibt eine Leerzeile aus
+
+
+VARIABLEN
+=========
+Der Begriff "Variable" wird in verschiedenen Programmiersprachen verschieden definiert. Für Lisp und Scheme heisst es: "Scheme erlaubt es, dass Bezeichner für Speicherplätze stehen, die Werte enthalten. Solche Bezeichner heißen Variablen". In Lisp sind solche Variablen Symbole, die einen Namen als Bezeichner haben (der eben das Symbol lexikalisch darstellt).
+*** Binding ***
+Laut "Practical Common Lisp": "A binding is the runtime manifestation of a variable."
+Die Sichtbarkeitsregeln können auf zwei unterschiedliche (sich gegenseitig ausschliessende) Arten festgelegt werden; dabei ist das Konzept der Bindung wichtig. Bindung bedeutet hier die Zuordnung eines bestimmten Namens zu der damit verbundenen Variablen.
+Zitat "Successful Lisp":
+...
+It is quite common for multiple bindings to share the same name. For example:
+
+(let ((a 1))
+   (let ((a 2))
+      (let ((a 3))
+         ...)))
+As you can see, the notion of innermost binding depends on the relative position of your program's code to the form that established a particular binding. If you look at how binding forms are nested (easy to do if you indent your code as shown above) then the program has access to bindings created around, or enclosing, your program code.
+
+One more thing you should know is that an outer binding is still visible through inner binding forms, as long as the inner binding form does not bind the same symbol:
+
+;; Here, A and B have no binding.
+(let ((a 1)
+      (b 9))
+   ;; Here, the innermost binding of A has the value 1,
+   ;; and the binding of B has the value 9.
+   (let ((a 2))
+      ;; Here, the innermost binding of A has the value 2.
+      ;; The binding of B still has the value 9.
+      (let ((a 3))
+         ;; Here, the innermost binding of A has the value 3.
+         ;; B still has the value 9 from the outermost LET form.
+         ...)))
+The program can only access bindings it creates
+
+When a binding form binds a new value to an existing symbol, the previous value becomes shadowed. The value of the outer binding is hidden (but not forgotten) while your program code executes inside the inner binding form. But as soon as your program leaves the inner binding form, the value of the outer binding is restored. For example:
+
+(let ((z 1))
+   ;; Here, the innermost binding of Z has the value 1.
+   (let ((z 2))
+      ;; Here, the innermost binding of Z has the value 2.
+      ...)
+   ;; Now we're outside the inner binding form,
+   ;; and we again see the binding with the value 1.
+   ...)
+...
+
+
+Hat eine Variable die Identifikation (Namen) x beispielsweise auf globaler Ebene und wird sie auf lokaler Ebene nochmals mit derselben Identifikation definiert, so sagt man, die Variable x hat zwei Bindungen (bindings).
+Lexikalisch (oder statisch) heißt, der umgebende Programmtext (die Definition) bestimmt die Bindung. Wenn z.B. in einem Block die Variable t1 auf 42 gesetzt wird und in demselben Block eine Funktion aufgerufen wird, die die Variable t1 ausgibt, so weiss diese Funktion nichts von dem Wert 42, sondern kennt nur den globalen Wert von t1 (wenn dort überhaupt vorhanden).
+Dynamisch, das heißt, die Ausführungsgeschichte (meist der Stack) zur Laufzeit des Programms bestimmt die Bindung.
+Beispiel: defvar. Namen von dynamischen (also globalen) Variablen sollten stets mit * eingefasst sein, z.B. *my-varname*
+In Lisp kann man auch gleichzeitig auf der gleichen Stufe mehrere Bindungen für einen Identifizierer haben, es gibt Variablen/Value-Bindung, Funktions-Bindung und andere (die man kaum je braucht). Das ist nichts anderes als eine Liste mit Adressen, die auf die entsprechenden Speicherstellen zeigen. Redet man vom Wert (value) einer Variablen, so ist meistens der Inhalt/Wert des entsprechenden Value-Binding-Feldes gemeint, aber das ist selten wichtig.
+Siehe dazu später auch unter "Closures".
+
+*** Generalized Variables ***
+So nennt man Plätze, an denen Zeiger (pointer) auf Daten (oder andere Zeiger) gespeichert werden können. Damit sind also auch die Glieder einer verketteten cons-Liste u.ä. gemeint Mit verschiedenen Funktionen kann man auf solche Variablen zugreifen, damit wird eine Zeigerfunktionalität möglich. Siehe später z.B. die Beschreibung zu setf (set field). Anstatt mühsame Zeigerkopiererei (wie in Java, C++ etc.) kann man z.B. ein einzelnes Glied ganz einfach aus einer Kette lösen: (
+
+
+*** Globale Variablen und Konstanten ***
+Globale Variablen sind in der Regel verpönt, in Lisp kann man sie simulieren, da mit "setf" und Konsorten definierte Variablen auf der obersten Ebene (top-level) sich wie globale Variablen (read-only, also eher lokal überschreibbare Konstanten) verhalten (semantisch sind sie aber immer noch normale lexikalische Variablen, d.h. man kann sie nicht in einem Sub-Block überschreiben, sie werden dort höchstens neu definiert für den jeweiligen Block, dieser Vorgang wird auch "shadowing" genannt). Braucht man doch einmal unbedingt eine "echte" globale Variable (wie z.B. in einigen Games), die zu allem Übel auch verändert werden können sollen von Funktionen (genau deswegen sind globale Variablen ja verpönt, denn lokale Änderungen gelten überall! Nur ist das bei einigen Spielen ja durchaus so gewollt), also nutzt man eine der später folgenden Funktionen. Globale Variablen können im top-level Kontext per setq o.ä. definiert werden. Benötigt man dynamic scoping (siehe nächsten Abschnitt), so sollte man entsprechende Funktionen verwenden (siehe ebenfalls weiter unten).
+
+*** Special variables / dynamic scoping ***
+Hier aus "Successful Lisp" die meiner Meinung nach beste und kürzeste Erklärung bez. Scope und Extent von Special variables:
+...
+Slightly trickier: special variables
+
+Special variables (also known by the more technically correct term dynamic variables) have dynamic scope. This means that a binding is created for a special variable as a result of executing some form in your program. The scope of the dynamic binding extends into any form called (directly or indirectly) by the form which established the dynamic binding.
+The extent of a special variable lasts indefinitely, until the form that created the dynamic binding is no longer a site of active program execution -- in other words, until the defining form (and all of the forms called by it) finishes executing. If the dynamic binding is created by a top level form, the extent is the same as described previously for top level defining forms.
+? (defparameter *my-special-variable* 17)
+*MY-SPECIAL-VARIABLE*
+? (defun show-my-special ()
+    (declare (special *my-special-variable*))
+    (print *my-special-variable*)
+    nil)
+SHOW-MY-SPECIAL
+? (defun do-something-else ()
+    (show-my-special))
+DO-SOMETHING-ELSE
+? (defun dynamically-shadow-my-special ()
+    (let ((*my-special-variable* 8))
+      (do-something-else))
+    (show-my-special))
+DYNAMICALLY-SHADOW-MY-SPECIAL
+? (dynamically-shadow-my-special)
+
+8
+17
+NIL
+When reading the above, pay special attention to DO-SOMETHING-ELSE -- this calls SHOW-MY-SPECIAL. SHOW-MY-SPECIAL would normally see the lexical value of *MY-SPECIAL-VARIABLE* -- 17 -- except for the declaration which says that *MY-SPECIAL-VARIABLE* is a special variable.
+
+DYNAMICALLY-SHADOW-MY-SPECIAL binds *MY-SPECIAL-VARIABLE* to the value 8, then calls DO-SOMETHING-ELSE, which in turn calls SHOW-MY-SPECIAL. At this point, the LET binding of *MY-SPECIAL-VARIABLE* is not lexically apparent to the code in SHOW-MY-SPECIAL. Yet, because the binding is declared special at the point of reference, and because the binding LET form is still active when DO-SOMETHING-ELSE calls SHOW-MY-SPECIAL, the dynamic binding of 8 (rather than the lexical binding of 17) is printed.
+
+Later during execution, the second call to SHOW-MY-SPECIAL happens outside of the LET form, and the top level value of *MY-SPECIAL-VARIABLE* -- 17 -- is printed.
+
+Strictly speaking, the (DECLARE (SPECIAL ... form is not necessary in SHOW-MY-SPECIAL -- the DEFPARAMETER form has the side effect of proclaiming its variable to be special. However, the added declaration adds redundant documentation at the point of use of the special variable. Furthermore, some Lisp compilers will issue a warning (typically: "Undeclared free variable assumed special") that is easily silenced by adding the declaration.
+...
+
+Früher der Standard. Heute nur noch selten verwendet (z.B. für Rebinding von *PRINT-BASE*). Lexikalische Kontextvariablen sind sicherer vor Fehlern.
+Special Variablen werden mit den Funktionen defvar, defparameter und defconstant deklariert (und ggf. initialisiert). Übrigens können nur globale und dynamische Variablen ohne Wert existieren (nur Deklaration, keine Definition). Lokale Variablen müssen immer einen Wert haben.
+In einem Satz gesagt, ist bei Special Variables/Dynamic Scoping das Besondere, dass sie auch nach dem Aufruf von beispielsweise "defvar" ihren Wert behalten => nicht-funktional.
+Merke: Dynamisches Scoping bedeutet, dass die Scope-Hierarchie erstellt wird basierend darauf, wo der Code evaluiert wird, und nicht auf dem Ort, wo der Code ursprünglich steht. Es kann also zu unterschiedlichen Abläufen (wenn es Verzweigungen resp. versch. Ablaufpfade gibt) verschiedene Variablenzustände geben. Natürlich ist dies in einer rein deklarativen Sprache wie Puppet gar nicht möglich, aber daher kommt die Bezeichnung "dynamisch".
+"...dynamically scoped, which means that scope hierarchies are created based on where the code is evaluated instead of where the code is defined." (Zitat von puppetlabs.com language guide).
+Beispiel aus "Practical Common Lisp": Wenn man temporär die globale (dynamische) Variable *standard-output* ändern will, ohne das Risiko, danach zu vergessen, sie wieder zurückzusetzen (es gäbe div. Probleme, z.B. mit Multithreading u.ä.), so kann man einfach im entsprechenden Block ein Rebinding machen: (let ((*standard-output* *other-stream*)) (do-stuff)). Alle, die nun die Variable nutzen (auch Aufrufe von Funktionen, die woanders definiert sind), sehen nur diese neue Bindung. Sobald dieser Code-Block verlassen wird, ist diese dynamische Bindung nicht mehr vorhanden/gültig und alle, die auf die Variable zugreifen, sehen wieder den alten Wert.
+
+*** Lexikalisches Shadowing vermeiden ***
+Falls Variblen _nicht_ im lexikalischen Kontext überschattet werden sollen, so muss man diese im Kontex als "special" deklarieren (special = dynamic).
+(defun foo ()
+  (let ((x 1))
+  (declare (special x))
+  (bar)))
+(defun bar ()
+  (let ((x 'zz))
+  (list x (symbol-value 'x))))
+Wenn die Funktion "bar" nun die Variable x benutzt oder gar mit let lexikalisch definiert, so hat x immer noch den Wert 1, wie er in foo definiert wurde, dies aber nur, wenn man mit "(symbol-value 'x)" darauf zugreift! Wenn nur x referenziert wird, hat es sehr wohl den neuen Wert von bar (seltsamerweise bei meinen Tests nun global). Ich habe das Gefühl, dass man dies nur zu schulischen Zwecken nutzen sollte... Es ist zum Debuggen einfach sehr mühsam, wenn es abhängig vom lexikalischen Kontext / dynamischen Status einer Variablen und ob sie global definiert wurde immer verschiedene Verhalten gibt bei der Referenzierung, manchmal ist (symbol-value) vorhanden, manchmal nicht etc. Eine Erklärung könnte sein, dass wenn man einmal eine Variable als special/dynamic deklariert hat, keine lexikalische Bindung für diese mehr möglich ist. Umgehen könnte man dies mit (locally (declare (special x)) (setq x ...)), um die Variable nur lokal dynamisch zu machen.
+
+*** Spezial-Variablen-Funktionen ***
+- defvar => Definiert explizit eine (special) Variable und weist ihr einen Wert zu. Falls die Variable bereits einen Wert hatte, wird dieser _nicht_ überschrieben. Wenn man eine Variable mit defvar deklariert, aber nicht initialisiert, bleibt sie trotzdem special / dynamisch, auch wenn sie erst später innerhalb einer Funktion gebunden/definiert wird.
+- defparameter => wie defvar, allerdings wird die Variable implizit "special" und muss zwingend initialisiert werden und bestehende Werte werden von defparameter überschrieben (eben Parameter und nicht Variable, also an globaler Stelle für das Verhalten des Programms zuständig). Man sollte defparameter als Konvention für globale Variablen verwenden, wenn sie dynamic scoping benötigen. Wie der Name schon andeutet, sollten diese Variablen das Verhalten des Gesamtsystems parametrisieren.
+- defconstant => dito, aber als Konstante (Wert kann/sollte nicht mehr geändert werden).
+
+*** Rebinding von Special Variablen ***
+Special Variablen werden in erster Linie für Rebinding genutzt, wo Kommunikation in grösseren Softwaresystemen möglich sein soll, ohne Funktionsparameter zu nutzen. Ein Beispiel ist die Zahlenbasis der Print-Funktion und andere Systemparameter (wie war das nochmal mit convention over configuration?). Mit Rebinding ist eigentlich das Rebinding des Namens der Variable gemeint, die (temporär) einen anderen Variablenwert referenziert.
+(defun print-in-base (*print-base* x)
+	(format t "~&~D is written ~S in base ~D."
+		x x *print-base*))
+Hier wurde die globale dynamische Variable *print-base* lokal neu gebunden, d.h. der Name zeigt auf einen anderen Wert, solange das Neu-Binding in Kraft ist (während die Funktion aufgerufen wird).
+
+*** Variablen-Zuweisungs-Funktionen ***
+Mit diesen können auch lexikalische Variablen definiert werden, wenn der Name der Variablen vorher noch nicht existiert hat, wird sie definiert. Im top-level-Kontext kann man so auch globale Variablen ohne dynamischen Scope definieren. Zuweisungen arbeiten übrigens mit Nebenwirkungen (side effects) anstatt nur mit Funktionswerten. Deshalb sollte man in der funktionalen Programmierung eher sparsam damit umgehen.
+- setq => (von "set quoted"): Ein Operator, der eine (dynamische) Variable definiert. Erster Parameter wird _nicht_ evaluiert, muss also einen Variablennamen darstellen (R-value). Äquivalent zu (set (quote foo) 42), daher der Name. setq wird als veraltet angesehen, da setf flexibler ist (kann auf Zeiger resp. "Felder" zugreifen).
+BEACHTE: Folgende Funktionen (vor allem set) müssen nicht zwingend mit speziellen Variablen eingesetzt werden (afaik). Da aber alle setX-Funktionen nicht in Funktionsformen oder Blöcken benutzt werden sollten für die Deklaration von Variablen, nutzt man sie im top-level-Kontext, und dort werden bekanntermassen automatisch globale Variablen deklariert. Man kann die setX-Funktionen aber natürlich für das Zuweisen von Werten an bereits bestehende globale Variablen benutzen in einer Funktion (siehe div. Games), auch wenn dies vom funktionalen Paradigma abweichend ist.
+- setf => (von "set field"): Eine Funktion, die einer (dynamischen) Variablen einen Wert zuweist (assignment). Der erste Parameter wird als Zeiger interpretiert, deshalb kann man bestehende Daten (vor allem nützlich mit Listen) leicht manipulieren: (setf (first this-is-a-list) 'new-value). Man sagt, setf entspricht dem L-value von imperativen Sprachen, damit Zuweisungen gemacht werden können. Wenn setf mit einer Variablen als "Feld" aufgerufen wird, so ruft sie implizit setq auf. Eine Eselsbrücke für mich: setf setzt den _Wert_ des zweiten an die _Adresse_ des ersten Parameters. Man könnte also durchaus auch sagen, es wird referenziert (wurde in einigen Foren auch so erklärt). Man sollte heute immer setf benutzen, wenn man nicht unbedingt etwas anderes braucht (siehe Herleitung und Beschreibung von setq).
+- set => Eine Funktion: äquivalent zu (setf (symbol-value 'varname) 'value). Weist der Variable mit dem Symbol-NAMEN, der im Symbol-WERT des ersten Arguments liegt, einen Wert zu. Interessant: der Variablenname muss als Symbol-Wert angegeben werden (nicht als Variable resp. Symbolnamen), d.h. er wird zuerst evaluiert: (set 'varname 'value), d.h. man kann Variablen aus Daten generieren, z.B. (set (first a-name-list) 'value). Auch set gilt heute als veraltet.
+
+*** Herleitung ***
+Früher gab es nur "set" in CL. Daher sind setf und setq nichts anderes als ein Wrapper von set: (set 'foo 42)  <=> (set (quote foo) 42) <=> (setf foo 42) <=> (setf (symbol-value 'foo) 42) <=> (setq foo 42) Man sieht hier schön, dass eine Variable evaluiert wird zu (symbol-value 'variable), was einiges klarer macht. Ein Zugriff auf eine Variable gibt i.d.R also den Inhalt (resp. den Inhalt des Verknüpfungszieles) der Variable mit dem gegebenen Namen aus. Variablen sind intern als Tabellen realisiert, deshalb kann in Lisp eine Variable auch wie eine Funktion heissen, da der Funktionskörper in der Zelle "function-value" (oder so) gespeichert wird, während der Wert wie oben erwähnt erreichbar ist. Eselbrücke: set setzt den Wert des zweiten an die Adresse des Wertes des ersten Parameters.
+
+*** Welches soll man nun benutzen? ***
+Am besten ist man sagt, was man möchte: setq ist eher "low-level" und wird für Variablen-Definitionen genommen. setf ist eine höherwertige Funktion (Makro), man benutzt es, um Zuweisungen in Listenelemente u.ä. zu machen (Einsatz als L-value). set braucht man, wenn man den Namen der Variablen dynamisch (z.B. aus Listen) entnehmen möchte. OPINION: Im "Common Lisp: A Gentle Introduction to Symbolic Computation" steht, dass set und setq als veraltet gelten und man setf benutzen sollte wann immer möglich. In den meisten Foren wird ebenfalls geraten, das moderne setf zu verwenden, so lange man nicht exotische Dinge machen möchte. Aber wie gesagt, meist wird man ohnehin zu let greifen, da meist funktional programmiert wird (schliesslich ist das Lisp;-)
+
+*** Beispiel zum Unterschied dynamic / lexical scoping ***
+Hier noch ein Beispiel, wie dynamische Variablen die lexikalischen "übersteuern" können:
+(defvar birds) ; Deklaration als special variable
+(setf fish '(salmon tuna)) ; Globale Variable lexikalisch
+(setf birds '(eagle vulture)) ; Globale Variable special (dynamic scoping) wie oben deklariert
+
+(defun ref-fish ()
+	fish))						; wird immer lexikalisch die globale Variable referenzieren
+(defun ref-birds () 
+	birds))						; Wird immer dynamisch referenziert vom Aufrufort aus
+
+(defun test-lexical-fish (fish)
+	(list fish (ref-fish)))
+(defun test-lexical-birds (birds)
+	(list birds (ref-birds)))
+
+(test-lexical-fish '(guppy minnow))
+=> ((GUPPY MINNOW) (SALMON TUNA)) ; lexikalische Grenzen können nicht durchdrungen werden,
+                                  ; deshalb referenziert ref-fish die globale Variable.
+(test-lexical-birds '(tchippy owl))
+=> ((TCHIPPY OWL) (TCHIPPY OWL)) ; lexikalische Grenzen werden dynamisch durchdrungen, beim
+                                 ; Aufruf der Funktion ref-birds referenziert diese nicht mehr
+                                 ; die globale Variable birds, sondern die beim Aufruf exis-
+                                 ; tierende lokale (shadowed) Version.
+Man kann mit dynamischen Variablen also quasi "ausbrechen" aus dem lexikalischen Kontext (jede top-level definierte Funktion existiert kann normalerweise nur Variablen im selben Kontext referenzieren). Die üblichen Grenzen (siehe die dicken Linien der Grafiken in "Common Lisp: A Gentle introduction to Symbolic Computation") können durchdrungen werden. Dass dies bei ungehemmter Verwendung Probleme und schwer nachvollziehbare Bugs verursacht, dürfte ja klar sein. Deshalb sollte dynamic scoping nur für kommunikative und parametriesier-Zwecke in grösseren Systemen verwendet werden (siehe Beispiel weiter oben mit *print-base*).
+Siehe auch S. 71ff in "Practical Common Lisp": Beispiel, wie man temporär den *standard-output* verändern kann, indem man einfach let verwendet, anstatt die globale Variable per defparameter oder setf neu zu definieren/zuzuweisen, womit man sich das Zurücksetzen erspart (was ohnehin leicht vergessen ginge). Die neue Bindung ist einfach in der let-Form gültig (und eben auch für alle Funktionen, die in der let-Form aufgerufen werden). Ein "special-binding" landet auf einem globalen Stack (dort können beliebig viele bindings liegen, die der Reihe nach wieder "abgebaut" werden), während das lexical binding eben nur für die konkrete Form gültig ist.
+
+*** Beispiele setf ***
+Mit setf kann wie schon erklärt, auf Speicherstellen resp. Zeiger zugegriffen werden, womit die cons-Strukturen (Listen) bestens manipuliert werden können:
+(defun chop (x)
+  (if (consp x) (setf (cdr x) nil))
+  x)
+Hier eine eigene Version der destruktiven nconc Funktion (analog append, verändert aber die erste Datenstruktur):
+(defun my-nconc (x y)
+  (cond ((null x) y)
+        (t (setf (cdr (last x)) y)
+           x)))
+
+*** Lexikalische Variablen / lexical scoping ***
+Man sollte wann immer möglich auf Zuweisungen verzichten, um den Code sauber und elegant zu halten (assignment-free style = keine Nebenwirkungen), dabei werden durchaus lokale Variablen im let-Konstrukt definiert, aber ihr Wert soll sich danach nicht mehr ändern. Manchmal kann es aber angebracht sein, doch mit Zuweisungen zu arbeiten (siehe Beispiel S. 313 in "Common Lisp: A Gentle Introduction to Symbolic Computation", dann sollte man let-Konstrukte verwenden, um die Variablen wenigstens Block-lokal zu halten.
+Mit let erstellte lexikalische Kontexte sind wann immer möglich zu bevorzugen vor Zuweisungen (assignments), da Zuweisungen meist mit globalen Variablen arbeiten und auf Nebenwirkungen setzen (side effects).
+Auch Funktionsparameter sind lexikalisch (Form-lokal), sie werden bei Eintritt in die Funktion initialisiert und gehen bei ihrem Austritt wieder verloren.
+
+*** Funktionen für lexikalische Variablen ***
+Für lexikalische Variablen (resp. im lexikalischen Kontext gebundene Variablen) nutzt man eine der folgenden Funktionen (meist funktions-lokal):
+- let => erstellt einen lexikalischen Block, in dem zuerst die lokalen Variablen definiert und ein Wert an sie gebunden wird und dann (im selben let-Block) Operationen mit ihnen auszführen.
+- let* => dasselbe, aber die Variablen-Bindung findet sequentiell statt. Wichtig, wenn Variablenbindungen auf vorher im selben let definierten Variablen basieren sollen.
+
+Beispiel, wie man "Zeiger" mit Variablen machen kann
+====================================================
+* (setq var-1 'var-2) => Die Variable mit dem Symbol mit dem NAMEN var-1 erhält den WERT var-2 (gequoted, damit er nicht von setq evaluiert wird)
+* var-1 eintippen ergibt das Resultat: VAR-2
+* var-2 eintippen ergibt das Fehler-Resultat: variable VAR-2 has no value / unbound variable o.ä. * (set var-1 99) => Dem Symbol mit dem NAMEN des WERTES von var-1 wird der WERT 99 zugewiesen. Also wird indirekt das WERT-Feld von var-2 mit 99 gefüllt. 
+* var-2 eintippen ergibt das Resultat: 99
+* var-1 eintippen ergibt nach wie vor: VAR-2
+
+
+FUNKTIONEN
+==========
+Funktionen sind "first-level-objects" in Lisp, d.h. man kann sie an Variablen binden (die auch denselben Namen wie bereits bestehende Variablen haben können, da die Funktionsadresse in ein anderes "Feld" geschrieben wird) und so aufrufen.
+- defun => Definiert eine lexikalische (statische/globale) Funktion. Genauer gesagt wird die Form der Funktion (der Funktionskörper) an einen Namen gebunden. Diese Funktion kann dann in einer beliebigen Form als erstes Argument verwendet werden => (my-function x y) 
+- flet => bindet Funktionen an dynamische Variablen. Diese Funktionen können beispielsweise mit "funcall" oder "apply" aufgerufen werden.
+
+*** Recycling-Funktionen (nach Practical Common Lisp so genannt, um nicht mit for-side-effects, also zerstörerischen Funktionen verwechselt zu werden ***
+Beispiel: reverse / nreverse. Bei Funktionen mit dem n vorne steht dieses für non-consing. Es werden keine neuen Cons-Zellen erstellt, sondern die alten werden wiederverwendet. Wenn man also reverse benutzt, um eine (globale) Variable zu ändern, so wäre nreverse effizienter, denn reverse erstellt erst eine neue Cons-Liste, wo die umgekehrte Reihenfolge der Elemente eingefügt wird, so dass die alte Version in die garbage collection läuft. Es gibt aber auch recycling-Funktionen, die kein n voraus haben, wie delete, delete-if etc., welche die Recycling-Versionen von remove-xyz sind. Auch nconc ist ein Spezialfall, denn er ist die recycling-Version von append (nicht von conc, wie man denken würde, denn das gibt es gar nicht). Es gibt nur wenige Recycling-Funktionen, auf deren Nebenwirkungen (side-effects) man sich verlassen darf: nconc, nsubstitute-xyz.
+*** Lambda / Lexical Closure ***
+Laut "Practical Common Lisp": Beispiel (let ((count 0)) #'(lambda () (setf count (1+ count)))) "The anonymous function is called a closure because it 'closes over' the binding created by the LET." und "The key thing to understand about closures is that it's the binding, not the value of the variable, that's captured.
+Generiert eine sogenannte "lexikalische Closure" (mit "function" oder kurz #' kann je nach Implementierung etwas anderes stehen, aber das Verhalten von Lambda ist dasselbe), eine anonyme Funktion, die entweder im Kontext sofort aufgerufen werden kann (z.B. als Argument von find-if, delete-if-not etc.) Sie kann auch an eine Variable gebunden werden (bzw. an dessen Funktionszelle), womit der Wert der Variable (also in ihrem Funktionsfeld) die Funktion ist. Damit kann sie aber nicht als Funktion in einer Form aufgerufen werden, denn die Variable selber ist keine Funktion (sondern eben nur ihr Wert), dafür kann sie als Argument von z.B. funcall, apply etc. verwendet werden. Eine Closure "erinnert" sich an ihre lexikalische Umgebung/Bindings. Wenn innerhalb der Closure (wenn ihr Code ausgeführt wird) beispielweise ein Zähler erhöht wird (umständlich gesagt: eine neue Bindung an einen neuen Wert/Objekt/whatever für die lexikalische Variable gemacht wird), so bleibt dies erhalten, und kann bei späterer Nutzung der Closure verwendet werden. Wenn man nun also eine Lambda-Closure an "find-if" o.ä. übergibt, so hat diese Closure Zugriff auf lokale Variablen des Kontextes, in dem sie definiert wurde (also z.B. der Funktion, in welcher der find-if gemacht wird). Eine Closure kann also durchaus als Zustandsspeicher für das Programm dienen, so dass man nicht unbedingt auf globale oder andere spezielle Variablen zurückgreifen muss.
+
+*** Beispiel lexical closure ***
+Man kann keine Bindung von Variablen zurückgeben, da diese keine first-class-objects sind. Es können nur Werte von Variablen zurückgegeben werden (wie üblich). Um aber auch ausserhalb oder später noch Zugriff auf eine lokal definierte / lexikalische Variable zu haben, muss deren Bindung irgendwie konserviert werden. Dies geschieht mit dem Lambda-Konstrukt, durch welches man eine Funktion dazu bringt, ein Funktionsobjekt zurückzugeben (Funktionsblöcke sind first-class-objects in Lisp). In dieser sog. lexical closure sind auch die Variablenbindungen, die per let u.ä. definiert wurden, gespeichert.
+(defun baz ()
+  (let ((x 1))
+  (lambda ()
+    (setq x (+ x 1)))))
+Merke: Bei jedem Aufruf von baz wird eine neue Bindung kreiert. In diesem Beispiel könnte man also verschiedene Variablen mit baz initialisieren und diese Variablen dann mit (funcall bazvar) aufrufen, jede hätte ihre eigene Variable x zum inkrementieren. Dies ist der einzige Weg, beständige/globale Variablen im funktionalen Paradigma zu haben (das Problem ist nur, dass die Variablen, in denen der Kontext gespeichert würde, entweder selbst in einem übergeordneten lexikalischen Kontext stehen müssten, oder aber per setq/defvar global definiert werden müssten, was wiederum gegen das funktionale Paradigma verstösst).
+Man kann übrigens auch mehrere Lambda-Blöcke zurückgeben (man adressiert dann später im Funktionsaufruf einfach die entsprechende Closure-Variable mit first, last o.ä.), dadurch lassen sich ähnliche Funktionalitäten bündeln, die Variablenbindung bleibt aber dieselbe (keine separaten Kontexte). Also eigentlich ein "Slot" mit mehreren Methoden, der Anfang von OOP! (genau so macht man es auch).
+
+*** Funktionen als Blöcke und return-from ***
+return-from ist eine Möglichkeit, um aus (benannten) Blöcken herauszuspringen (wenn gewünscht mit einem Resultat), wie der Funktionsname schon andeutet, muss der Name des zu verlassenden Blocks angegeben werden. Das einfache return, dass später in iterativen Funktionen gezeigt wird, springt aus anonymen (impliziten) Blöcken wie dolist, loop u.ä. diese sind nämlich immer in einen Block namens nil eingeschlossen.
+
+*** Funktionsargumente ***
+- Lambda-list-keywords: &optional => steht vor optionalen Argumenten, diese können einen Defaultwert erhalten mit (name wert). &rest => steht für eine unbegrenzte Anzahl Argumente (z.B. bei +, progn u.ä.)
+- Keywords: Keyword argument sind benannte Argumente => (defun myfun (name &key (size 'normal) (type 1) color size)) Wie zu sehen ist, können diese ebenfalls Defaultwerte haben oder alleine stehen. Ein dritter Parameter ist der sogenannte supplied-p, mit dessen Hilfe man in der Funktion auswerten kann, ob ein Parameter gesetzt wurde. Man gibt einfach c-p mit nach dem Defaultwert: (defun myfun (&key a (b 20) (c 30 c-p))
+
+Applikation (applikatives Programmieren)
+========================================
+Hierbei handelt es sich im eigentlichen Sinne um funktionales Programmieren. Es werden Funktionen (oder Lambda-Ausdrücke resp. lexikalische Closures) auf Listen oder Argumente "appliziert" d.h. angewandt. Ohne darauf näher einzugehen (siehe entspr. Literatur) ein paar Beispiele:
+*** Applikative Funktionen ***
+- apply =>
+(apply #'+ (list 1 2)) => die wohl grundlegendste applikative Funktion, appliziert eine übergebene Funktion auf eine Liste von Argumenten.
+- concatenate =>
+Konkateniert Argumente des angegebenen Typs:
+(concatenate 'list #(1 2 4) '(4 5))
+(1 2 3 4 5)
+(concatenate 'vector '(1 2 3) #(4 5))
+#(1 2 3 4 5)
+(concatenate 'list "hello") ; string is a subtype of sequence 
+(#\h #\e #\l #\l #\o)
+- mapcar / mapc =>
+Auch eine grundlegende applikative Funktion, wendet eine Funktion auf die einzelnen Elemente von Listen (also jeweils auf car der Liste) an. mapc unterscheidet sich nur in der Ausgabe, am Ende wird das erste Argument original noch mal ausgegeben (side-effect). mapc und mapl sind nur nützlich, wenn man sich für die Nebenwirkungen interessiert (z.B. zur Ausgabe mit format o.ä.)
+(mapcar #'atom (list 1 '(2) "foo" nil))
+(T NIL T T)
+(mapcar #'+ (list 1 2 3) (list 4 5 6))
+(5 7 9)
+- mapcan => wie mapcar, erwartet aber Listen als Rückgabewerte, die dann konkateniert ausgegeben werden
+Hier noch ein Beispiel, das klar macht, wie mapcar / mapcan sich verhalten:
+(mapcar #'(lambda (x) (if (= x 3) nil x)) *a*)
+(1 2 NIL 4 5 6)
+(mapcan #'(lambda (x) (if (= x 3) nil x)) *a*)
+6
+(mapcan #'(lambda (x) (if (= x 3) nil (list x))) *a*)
+(1 2 4 5 6)
+Mit mapcan kann man also (remove 4 *a*) implementieren (wenn es nicht da wäre).
+- maplist => wie mapcar, jedoch wird der Rest der Liste (cdr) anstatt das erste Element (cat) verarbeitet
+- map => ist wie mapcar, aber generisch (funktioniert nicht nur für Listen), so dass man einen Typ übergeben muss, somit ist mapcar als eine Ausprägung von map zu sehen. Beispiel für map auf Liste mit dem gleichen Effekt wie das obige mapcar-Beispiel: (map 'list #'+ (list 1 2 3) (list 4 5 6))
+- find-if =>
+(find-if #'zerop '(24 hello this is a list 214 39)) => findet das erste Element der Liste, für das die angegebene Funktion true evaluiert (meistens ein Prädikat).
+- delete-if-not =>
+(delete-if-not #'(lambda (x) (> x 4)) '(3 14 19)) => Filtert Werte einer Liste nach der Funktion (hier die Lambda-Closure x>4) aus.
+- reduce =>
+Dieser Applikator braucht Funktionen, die zwei (oder mehr) Argumente entgegennehmen:
+(reduce #'+ list-of-numbers)
+(reduce #'(lambda (x y) (/ (- x 2) (+ y 11))) list-of-numbers)
+einfacheres Beispiel: (reduce #'+ #(1 2 3 4 5 6 7 8 9 10)) Summiert von 1 bis 10.
+=> es gibt die Optionsvariable :initial-value, die man setzen kann (weil reduce für die erste Operation - aber nur für diese - einen zweiten Operanden benötigt).
+Hier ein Beispiel, wo man ihn zwingend braucht:
+(reduce (lambda (best item)(reduce (lambda (best item)
+		   (if (and (evenp item) (> item best))
+		       item
+		     best))
+		 '(7 4 6 5 2)
+		 :initial-value 0)
+auch beliebt ist das verflachen von Listen mit Listen als Elementen:
+(reduce #’append ’((one un) (two deux) (three trois)))
+- every => Damit können alle Elemente einer Liste auf Prädikate getestet werden:
+(every #'oddp list-of-numbers)
+
+
+Rekursion
+=========
+Hier das bekannte Standardbeispiel, um Rekursion zu zeigen ist die Fakultät:
+ (defun factorial (n)
+   (if (<= n 1) 1
+       (* n (factorial (- n 1)))))
+dies ist rekursiv aber nur scheinbar endrekursiv. Das Problem ist, dass der Rückgabewert des rekursiven Aufrufs jeweils noch mit n multipliziert wird (die Multiplikation ist also die letzte Funktion, die verarbeitet wird!).
+...und hier also eine Version als echte Endrekursion (tail call recursion), nur um zu zeigen, dass die auch möglich wäre:
+ (defun factorial (n &optional (acc 1))
+   (if (<= n 1) acc
+       (factorial (- n 1) (* acc n))))
+diese sollte gleich effizient sein wie die iterative Grundversion (siehe nächsten Abschnitt).
+=> Alles passiert auf dem Stack (innerhalb der Argument-Formen) des rekursiven Aufrufes.
+acc steht hier für "Accumulator", also ein Akkumulator, der das Ergebniss auf dem Call-Stack direkt berechnet. Dies hat den grossen Vorteil, dass beim Rekursionanker (dem letzten Aufruf) in der Rekursionkette ein Compiler/Interpreter sieht, dass nichts mehr gemacht werden muss. Dann kann die gesamte Aufrufkette übersprungen und acc direkt an den ursprünglichen Aufrufer zurückgegeben werden.
+
+Ein guter Absatz aus http://mitpress.mit.edu/sicp/full-text/book/book-Z-H-11.html#%_fig_1.4 zeigt auf, dass rekursive Prozesse sich _nicht_ einfach dadurch auszeichnen, dass eine Funktion sich selbst aufruft! Vielmehr kann man einen iterativen Prozess durchaus mit einer Funktion realisieren, welche sich zwar selbst aufruft, aber den kompletten Zustand (state) in den Parametern hat, anstatt mit den Rückgabewerten arbeitet (rekursive Prozesse haben den Zustand also auf dem Stack resp. der Interpreter muss Buch darüber führen):
+In contrasting iteration and recursion, we must be careful not to confuse the notion of a recursive process with the notion of a recursive procedure. When we describe a procedure as recursive, we are referring to the syntactic fact that the procedure definition refers (either directly or indirectly) to the procedure itself. But when we describe a process as following a pattern that is, say, linearly recursive, we are speaking about how the process evolves, not about the syntax of how a procedure is written. It may seem disturbing that we refer to a recursive procedure such as fact-iter as generating an iterative process. However, the process really is iterative: Its state is captured completely by its three state variables, and an interpreter need keep track of only three variables in order to execute the process.
+
+Einige Beispiele von "Tail-Recursion", die ich hier ab und zu aufführe, können also durchaus als iterative Prozesse bezeichnet werden.
+
+*** Rekursion-Muster ***
+Da sich viele Rekursionen ähnlich sind, spricht man von Mustern.
+Dabei wird meist eine Untermenge folgender Bezeichnungen verwendet (siehe "Common Lisp: A Gentle Introduction to Symbolic Computation"):
+Func: Funktionsname
+End-test: Test, um den letzten Aufruf festzustellen, z.B. (NULL X)
+End-value: Der Wert, der vom letzten Aufruf zurückgegeben werden soll, meist NIL, aber auch t ist möglich und bei mathematischen Funktionen natürlich eher 0 oder 1
+End-test-2: Falls ein zweiter Test gebraucht wird
+End-value-2: dito für dessen Wert
+Aug-test: Für konditionale Augmentierung (z.B. für Filterfunktionen, siehe weiter unten)
+Aug-fun: Verändernde Funktion, z.B. + oder cons
+Aug-val: Wert für die verändernde Funktion, z.B. 1 oder 'HUHU
+Reduced-x: Reduzierter Parameter für den rekursiven Funktionsaufruf. Z.B. (- N 1) oder (REST X) u.ä.
+
+
+*** Single Test Tail Recursion ***
+Hier ein Beispiel einer "single test tail recursion", die man verwendet, wenn man weiss, dass die Funktion _immer_ etwas finden wird, beispielsweise wenn man Funktionen verwendet, die nil akzeptieren (so entfällt der Test auf null, zerop u.ä.):
+(defun find-last-atom (x)
+  (cond ((atom (cdr x)) (car x))
+        (t (find-last-atom (rest x)))))
+
+*** Double Test Tail Recursion ***
+Folgende Funktion nutzt eine sog. "double test tail recursions" , da sie auf null (oder zerop u.ä.) sowie auf die eigentliche Aufgabenstellung testen, bevor sie in die Rekursion gehen. Meist wird auf Leerheit o.ä. getestet, damit beim zweiten Test kein Typfehler passiert.
+Hier ein Prädikat, das auch ohne Kunstgriff endrekursiv ist, da keine Funktion/Form mehr dem Resultat des rekursiven Aufrufes arbeiten muss:
+(defun anyoddp (x)
+  (cond ((null x) nil)
+        ((oddp (first x)) t)
+        (t (anyoddp (rest x)))))
+Bei dieser Funktion muss man aufpassen, denn da alle t sein _müssen_ (quasi ein AND für alle Elemente), so testet man auf NOT für den Ausstieg mit nil. Der End-Test gibt t anstatt wie üblich nil zurück, weil man nur an's Ende kommt, wenn alle Elemente zuvor gleich waren:
+(defun all-equal (x)
+  (cond ((null (rest x)) t)
+    ((not (equal (first x) (second x))) nil)
+    (t (all-equal (rest x)))))
+
+*** (Single test) Augmenting Recursion ***
+Eine Rekursion wie factorial wird deshalb auch "Augmenting Recursion" genannt (to augment = erhöhen, verbessern, verändern), da sie nach einem oder mehrern Tests noch den Ergebniswert mit einer Funktion verändert (bei factorial ist die "augmenting function" * und der "augmenting value" n). Augmenting Rekursionen können single oder double test sein. Natürlich sind diese keine Endrekursionen mehr. Folgende Zählfunktion ist eine augmenting recursion. _Keine_ Endrekursion.
+(defun count (x)
+  (cond ((null x) 0)
+        (t (+ 1 (count (rest x))))))
+
+*** List-consing Recursion ***
+Hierbei handelt es sich um einen Lisp-Spezialfall der Augmenting Recursion, bei der als augmenting function cons vorkommt. Für jeden Funktionsaufruf, der zurückkehrt, wird eine Cons-Zelle erstellt. _Keine_ Endrekursion.
+(defun laugh (n)
+ (cond ((zerop n) nil)
+       (t (cons 'ha (laugh (- n 1))))))
+
+*** Simultaneous Recursion on several variables ***
+Wenn mehrere Variablen im Spiel sind, werden einfach auch mehrere Variablen reduziert auf dem Stack. Dies _ist_ eine Endrekursion.
+(defun my-nth (n x)
+  (cond ((zerop n) (first x))
+        (t (my-nth (- n 1) (rest x)))))
+
+*** Conditional Augmentation ***
+Die Augmentierung wird nur in bestimmten Fällen vorgenommen. Anwendung meist bei Filterfunktionen u.ä. Trotz allem _keine_ Endrekursion.
+(defun extract-symbols (x)
+  (cond ((null x) nil)
+        ((symbolp (first x))
+         (cons (first x) (extract-symbols (rest x))))
+        (t (extract-symbols (rest x)))))
+
+*** Multiple Recursion***
+Es werden mehrere Rekursive aufrufe zugleich gemacht. Diese Rekursionsart ist nicht-linear. Sie wird auch "fat" oder "tree" recursion genannt. Das klassische Beispiel ist die Fibonacci-Funktion. Wichtigster Unterschied: Es gibt viel mehr als nur einen terminal function call, was natürlich nicht gerade Effizienzfördernd ist. _Keine_ Endrekursion.
+(defun fib (n)
+  (cond ((<= n 1) 1)
+        (t (+ (fib (- n 1))
+              (fib (- n 2))))))
+
+*** CAR/CDR Recursion ***
+Ein Spezialfall der Multiple Recursion. Wird vor allem verwendet, wenn Funktionen mit unvorhersehbar verschieden tief verschachtelten Listen umgehen können soll. Der Input wird hierbei als binärer Baum betrachtet. Man kann auf diese Weise auch binäre Bäume mit Hilfe von cons erstellen. CAR/CDR entspricht in dieser Reihenfolge der Preorder-Reihenfolge der Baumabarbeitung (da OR abbricht, wenn der erste Test erfolgreich ist). Ìch habe hier so viele Beispiele aufgeführt, da der Umgang mit beliebig verschachtelten Listen sehr häufig erforderlich ist. Dies _ist_ eine Endrekursion.
+(defun find-number (x)
+  (cond ((numberp x) x)
+        ((atom x) nil)
+        (t (or (find-number (car x))
+               (find-number (cdr x))))))
+In diesem Beispiel wird die Liste resp. Baumstruktur beibehalten (die Atome/Blätter werden mit q ersetzt). _Keine_ Endrekursion.
+(defun atoms-to-q (x)
+  (cond ((null x) nil)
+        ((atom x) 'q)
+        (t (cons (atoms-to-q (car x))
+               (atoms-to-q (cdr x))))))
+Und hier weil's so schön ist, noch ein Beispiel, dass alle Atome zählt (inkl. Nil):
+(defun count-atoms (x)
+  (cond ((atom x) 1)
+        (t (+ (count-atoms (car x))
+              (count-atoms (cdr x))))))
+Und noch eines, dass die cons zählt:
+(defun count-cons (x)
+  (cond ((atom x) 0)
+        (t (+ 1 (count-cons (car x))
+                (count-cons (cdr x))))))
+Hier eine rekursive Version der Substitution:
+(defun my-subst (new old tree)
+	   (cond ((equal old tree) new)
+		 ((atom tree) tree)
+		 (t (cons (my-subst new old (car tree))
+			  (my-subst new old (cdr tree))))))
+
+*** Hilfsfunktionen für Rekursionsaufrufe ***
+Manchmal wird eine rekursive Funktion nicht direkt sondern über eine (Wrapper)-Hilfsfunktion aufgerufen (weil wir ohne lokale Variablen auskommen wollen/müssen, immerhin sollte Lisp ja funktional sein):
+(defun count-up (n)
+  (count-up-recursively 1 n))
+(defun count-up-recursively (cnt end)
+  (cond ((> cnt end) nil)
+        (t (cons cnt (count-up-recursively (+ cnt 1) end)))))
+Hier dieselbe Funktionalität mit einer einzigen (aber etwas komplizierteren) Funktion:
+(defun count-up (n)
+	   (cond ((zerop n) nil)
+		 (t (append (count-up (- n 1)) (list n)))))
+Hier ein Beispiel welches zeigt, dass Hilfsfunktionen nicht nur einfache Wrapper sein müssen, sondern selbst auch die Lösung konstruieren:
+(defun my-union (x y)
+	   (append x (union-recursively x y)))
+(defun union-recursively (x y)
+	   (cond ((null y) nil)
+	     	 ((member (first y) x)
+	      	  (union-recursively x (rest y)))
+	     	 (t (cons (first y)
+			    (union-recursively
+			    x
+		        (rest y))))))
+*** Hilfsfunktionen lokal mit labels ***
+(defun tr-count-slices (x)
+	   (labels ((trc1 (x n)
+		      (if x
+			  		(trc1 (rest x)
+					(+ n 1))
+				 	 n)))
+	   		  (trc1 x 0)))
+
+*** Weitere Beispiele für Rekursionen ***
+Hier ein Beispiel, wie zwei Listen sortiert (aber die einzelnen Listen müssen schon in sortierter Reihenfolge stehen) zusammengemerged werden:
+(defun merge-lists (x y)
+  (cond ((null x) y)
+	    ((null y) x)
+	    ((< (first x) (first y))
+	     (cons (first x) (merge-lists (rest x) y)))
+	    (t (cons (first y) (merge-lists x (rest y))))))
+
+*** Tail recursion (Endrekursion) *** Wie gesagt ist dies die effektivste Variante. Warum? Ganz einfach, weil beim terminal function call (das letzte Glied der Rekursionskette) ein Wert zurückgegeben wird, der gleichzeitig das Ergebnis des ersten Funktionsaufrufes ist. Der Rückgabewert wird also der Stack-Kette entlang "hochgereicht". Dieses Hochreichen kann man sich sparen und direkt einen Sprung zurück an den Anfang machen. Genau dies machen die Compiler und teilweise auch die Interpreter der meisten Programmiersprachen. Man erkennt eine Endrekursion daran, dass es nur ein Rekursionglied gibt (keine "multiple recursion" und dass der Aufruf das einzige ist, was passiert. Bei den anderen Rekursionsarten ist beispielsweise + oder cons o.ä. vorgeschaltet, d.h. jeder rekursive Funktionsaufruf muss mit dem jeweiligen Ergebnis noch etwas tun (augmentation). Hier ein Beispiel, wie mit Hilfe eines Wrappers eine Augmenting Recursion zu einer Tail Recursion wird (das Zwischenresultat wird im Stack weitergegeben):
+(defun count-up (n)
+  (tr-count-up n nil))
+(defun tr-count-up (n result)
+  (cond ((zerop n) result)x
+        (t (tr-count-up (- n 1)
+                        (cons n result)))))
+Wie man bei meinem ersten Beispiel mit der Fakultät sieht, kann man unter Umständen auf Wrapper verzichten, indem man das optional-Attribut und einen Defaultwert für die Parameter verwendet, die man beim ersten Aufruf nicht nutzt (auch Akkumulator genannt):
+(defun factorial (n &optional (acc 1))
+  (if (<= n 1) acc
+     (factorial (- n 1) (* acc n))))
+Wie am Anfang des Rekursionsteils kurz erwähnt, wird hier der Zustand des Prozesses in den Parametern (also lokal begrenzten Variablen) gehalten, weshalb man hier ganz legal und offiziell von einem iterativen Prozess reden kann (der durch das Wegfallen von Buchhaltungsarbeit / Stackfülle) natürlich effizienter ist.
+
+Hier noch das Beispiel eines iterativen Prozesses (mit rekursiver Aufrufsyntax) ohne &optional, weshalb man die Startfunktion braucht. Gem. http://mitpress.mit.edu/sicp/full-text/book/book-Z-H-11.html#%_fig_1.4
+(define (factorial n)
+  (fact-iter 1 1 n))
+(define (fact-iter product counter max-count)
+  (if (> counter max-count)
+      product
+      (fact-iter (* counter product)
+                 (+ counter 1)
+                 max-count)))
+Man sieht hier wie im vorherigen Beispiel auch sehr gut, dass alle Berechnungen in den Parametern gemacht werden. Also kann zu jeder Zeit angehalten werden und man hat den Status, ohne dass man die vorherigen Stack-Calls braucht, wie bei einem rekursiven Prozess.
+
+
+Iteration
+=========
+''Achtung'': Mit Iteration ist hier das wiederholte ausführen von Blöcken gemeint. Prinzipiell iterative Prozesse können durchaus auch in rekursiven Syntaxen auftreten (siehe entsprechende Hinweise oben unter Rekursion)!
+
+*** Iterations-Funktionen ***
+- do: Das mächtigste iterative Makro in Lisp, bildet wie let einen lexikalischen Block, hat einen Test als Argument, um zu entscheiden, wann der Loop verlassen wird. Durch diese Mächtigkeit ist das Konstrukt etwas komplex:
+(defun check-all-odd (x)
+	   (do ((z x (rest z)))  ; lex. var. mit (optionaler) update-aktion
+	       ((null z) t)  ; test und action (mehrere aktionen möglich)
+	     (format t "~&Checking ~S..." (first z)) ; body (komplett optional)
+	     (if (evenp (first z)) (return nil))))   ; rest vom body mit return 
+Hier ohne einen body:
+(defun count-slices (loaf)
+	(do ((cnt 0 (+ cnt 1))
+			 (z loaf (rest z)))
+			((null z) cnt)))
+Dass die Variablenveränderung beliebig selbst gesteuert werden kann und es mehrere davon geben kann (man braucht keine let und setf zusätzlich), sind natürlich Vorteile gegenüber spezialisierteren Gebilden wie dolist oder dotimes. Man sieht das hier an der Fakultät mit do (schon sehr edel):
+(defun fact (n)
+	(do ((i n (- i 1))
+			 (result 1 (* result i)))
+			((zerop i) result)))
+			
+- dolist: Mit jedem Element einer Liste etwas machen (siehe Beispiele weiter unten)
+- loop: explizite Schleife. Mit verschiedensten Ausprägungen (for i from ... to ...) z.B. mit "collect" um eine Liste aufzubauen, die im Loop verwendet wird usw. siehe entsprechende Doku
+- dotimes: Lisp-Version des for-Konstrukts anderer Sprachen (dotimes 1 4):
+(defun launch (n)
+	(dotimes (i n)
+		(format t "~S..." (- n i)))
+	(format t "Zzzziisschhhh!"))
+	
+- return: Aus einer Iteration ausbrechen mit einem Rückgabewert
+
+Man sagt, die Iteration sei teilweise effizienter als Rekursion, das trifft aber nur dann zu, wenn die entsprechende Rekursion _nicht_ endrekursiv ist. Endrekursionen werden nämlich ohnehin vom Compiler implizit in Iterationen umgewandelt, da dies sehr einfach möglich ist:
+ (defun factorial (n)
+   (loop for i from 1 to n
+         for fac = 1 then (* fac i)
+         finally (return fac)))
+obige Version ist nicht sehr Lisp-mässig (hässlicher loop mit Zuweisung per =). Edler ist diese:
+(defun fact (n)
+	(let ((prod 1))
+		(dotimes (i n prod)
+			(setf prod (* prod (+ i 1))))))
+
+*** Wann Iteration? ***
+Iteration sollte bevorzugt werden, wenn man es mit flachen Listen (eindimensionale Listen / Vektoren) zu tun hat. Warum? a) Man braucht keine expliziten End-Tests, da nach der Abarbeitung der Liste durch dolist die return-form (oder nil, wenn keine definiert wurde) zurückgegeben wird. b) Die Element-Variable, die sukzessive die Werte der Liste annimmt, macht das Verständnis einfacher und man kann direkt auf das Element zugreifen (nicht mit (first x)).
+
+Hier ein Beispiel mit dolist, das zeigt, dass auch in Lisp ein return möglich ist:
+(defun check-all-odd (list-of-numbers)
+  (dolist (e list-of-numbers t)
+    (format t "~&Checking ~S..." e)
+    (if (not (oddp e)) (return nil))))
+Der vollständigkeit halber hier noch die entsprechende rekursive Variante, die gleich auch ein schönes Beispiel für die unless-Funktion zeigt. Da ohnehin nil zurückgegeben wird, wenn man die Rekursion abbricht (wenn evenp zutrifft), muss man dieses nicht explizit zurückgeben:
+(defun check-all-odd (x)
+  (cond ((null x) t)
+        (t (format t "~&Checking ~S..." 
+             (first x))
+           (unless (evenp (first x))
+             (check-all-odd (rest x)))))) 
+             
+Und hier eine iterative Variation von intersection, das für mich wunderbar zeigt, wie schön die Funktionen miteinander kooperieren können aufgrund ihres klaren und einfachen Verhaltens (dolist gibt result-set zurück, when ist einfacher als if u.ä.) Versuch' mal solch eine Funktion in Java oder C++ zu implementieren!
+(defun intersect (x y)
+	(let ((result-set nil))
+		(dolist (element x result-set)
+			(when (member element y)
+				(push element result-set)))))
+übrigens: es gibt auch eine Variante von push namens pushnew, die nur dann ein Element hinzufügt, wenn es nicht schon vorhanden ist in der Liste.
+Und noch ein wunderbares Beispiel von nth iterativ implementiert. Ich selbst habe viel zu kompliziert mit let, dolist, setn usw. gearbeitet, während diese Version aus "Common Lisp: A Gentle Introduction to Symbolic Computation" (anstatt mit lexikalischen Kontextvariablen wird sinnvollerweise mit destruktiven Funktionen gearbeitet):
+(defun it-nth (n x)
+	(dotimes (1 n (first x))
+		(pop x)))
+		
+DatenTypen & Datenstrukturen
+============================
+*** Chars und Strings ***
+#\e ist ein Character
+Ein Vektor von Characters ist ein String, man schreibt anstatt (#\h #\e #\l #\l #\o) besser "hello" (auch wenn es nur Syntaxzucker ist ;-)
+
+*** Zahlen ***
+Diese können als Integer und Fliesskommazahlen geschrieben werden. Es gelten die meisten Regeln, die auch aus anderen untypisierten Sprachen bekannt sind (z.B. wenn man eine Integerzahl mit einer Fliesskommazahl multipliziert wird das Ergebnis implizit in eine Fliesskommazahl verwandelt u.ä.)
+
+*** Structs ***
+- defstruct => Definiert eine freie Datenstruktur (Defaultwerte möglich). Man erhält automatisch einen Konstruktor make-XXXX (kann mit :keyword-Parametern arbeiten), Accessors (mit den Namen der Variablen, damit man lesen und via setf auch schreiben kann) und das Prädikat XXXp, um auf Typgleichheit zu prüfen und last but not least die copy-XXX Funktion, um eine (shallow?) Kopie der Struktur zu ermöglichen.
+Zu beachten: equal erkennt _nicht_ wenn zwei Strukturen inhaltlich und vom Typ her gleich sind! Deshalb ist equalp zu verwenden.
+- Vererbung: (defstruct (supply-ship (:include ship) (cargo nil)) Es gelten die üblichen Regeln (z.B. ein supply-ship ist auch vom Typ ship, aber nicht umgekehrt usw.)
+- Spezielle print-Varianten für komplexe Strukturen: Damit zirkuläre Listen und tiefe Nesting-Ebenen nicht zu Chaos bei der Ausgabe führen, kann man diese explizit angeben: (defstruct (starship (:print-function print-starship) (name nil)) und dann die print-Funktion: (defun print-starship (x stream depth) (format stream "#<STARSHIP ~A>" (starship-name x)))
+
+*** Association List (alist) ***
+Einfacher als Arrays aber nicht sehr effizient, wenn sie grösser werden. Es handelt sich eigentlich um "dotted pairs" (also cons-Zellen ohne nil => keine gültigen Listen) mit  Schlüssel/Werte-Paaren als car/cdr: 
+((pine . cones)
+      (oak . acorns)
+      (maple . seeds))
+Man kann auch sagen, es ist eine Liste, deren Elemente Cons-Zellen statt Sub-Listen sind.
+*** alist-Funktionen ***
+- assoc => Die lookup-Funktion (verwendet den car als Schlüssel)
+- rassoc => dito mit cdr als Schlüssel
+- acons => vereinfachtes cons für alists (weniger Klammern ;-)
+- pairlis => alist erstellen mit zwei Listen (eine für Schlüssel, die andere für Werte)
+*** Property list (plist) ***
+Technisch gesehen wie alists: Eine Liste mit abwechselnden Schlüssel-Wert-Paaren. Eine property List kann mit der normalen LIST Funktion erstellt werden, man verwendet keyword-Symbole als Feldbezeichner: (list :prename 'Kurt :surname 'Meier :address 'Rosenstrasse).
+Ein grosser Vorteil von plists (gegenüber komplexeren Datenstrukturen beispielsweise aus CLOS) ist der einfache Felderzugriff: Lesen: (getf plist :surname) Schreiben: (setf (getf plist :surname) "Müller").
+Da property lists global sind, gelten sie heute als überholt und man sollte sie nicht mehr nutzen.
+Man kann auch sagen, plist ist eine flache Liste mit abwechselnd den Schlüsseln und Werten als car der cons-Zellen.
+*** Property list-Funktionen ***
+- symbol-plist => listet alle properties eines Symbols auf
+- getf => Zugriff (auch zum Schreiben mittels setf) auf ein Property: (get 'sym1 'size)
+- remf => Entfernt ein Element (Nebenwirkung!)
+- addprop => Ein Property zur plist hinzufügen
+- remprop => Entfernt das gewünschte Property aus der plist.
+
+*** Destructuring-Bind ***
+Ist zwar nicht direkt eine Datenstruktur, aber ebenfalls ein Werkzeug, um mit Listen umzugehen. Und zwar wird es benutzt, um beliebige Listen (vor allem Argument-Listen von Forms) auseinanderzunehmen. Die Parameter von destructuring-bind sind wie bei Makros: &optional, &rest, &key. 
+Kurz gesagt werden Variablen gebunden mit Werten einer Liste (die aus einer Form generiert wird).
+Beispiele:
+(destructuring-bind (x y z) (list 1 2 3)
+  (list :x x :y y :z z))
+=> (:X 1 :Y 2 :Z 3)
+Und nun wird's interessant, denn hier ähnelt es sehr dem Pattern-Matching von Haskell ( f (x:xs)= x:x:xs ):
+(destructuring-bind (x (y1 y2) z) (list 1 (list 2 20) 3)
+  (list :x x :y1 y1 :y2 y2 :z z))
+=> (:X 1 :Y1 2 :Y2 20 :Z 3)
+Die Parameter-Struktur kann also semantisch gleich angegeben werden.
+(destructuring-bind (x (y1 &optional y2) z) (list 1 (list 2) 3)
+  (list :x x :y1 y1 :y2 y2 :z z))
+=> (:X 1 :Y1 2 :Y2 NIL :Z 3)
+*** Vektoren / Arrays ***
+Wichtig! Arrays sind keine cons-Listen! Eindimensionale Arrays werden als Vektoren bezeichnet. Man nutzt Arrays in Lisp eher selten.
+Simplen Vektor erstellen und einer Variable zuweisen: (setf my-vec '#(tuning violin 440 a)). Ein Array ist immer ein zusammenhängender Block im Memory, was den Zugriff (z.B. über den Index) äusserst schnell macht (im Vergleich zu normalen Lisp-Listen, die ja sequentiell durchsucht werden müssen). Das erste Element des Arrays (implizit) ist der Array-Header mit div. Informationen (Grösse, Anzahl Elemente u.ä.). Trotz der höheren Zugriffsgeschwindigkeit werden Arrays wie erwähnt selten genutzt, da sie unflexibel sind (Vergrössern ist eine sehr teuer Operation).
+*** Vektoren / Strings ***
+Strings sind nichts anderes als Vektoren (eindim. Arrays) von Characters. Character (z.B. #\a) sind wie Numbers ein Datentyp, der als Konstante zu sich selbst evaluiert. Deshalb kann man Strings sehr gut mit Array-Funktionen manipulieren.
+- vector => Konstruiert einen simplen Vektor
+- #() => dito, sollte aber nicht verwendet werden
+*** Array-Funktionen ***
+- make-array => Konstruiert ein Array, die Länge muss bei der Erstellung bekannt sein. Kann mit Defaultwerten vorbelegt werden: (make-array 6 :initial-element 0) und man kann auch alle Elemente bei der Definition bereits angeben: (make-array 3 :initial-contents '(one two three)). :fill-pointer 0 verwenden für ein dynamisches Array. Zusätzlich explizit :adjustable t, um die Grösse änderbar zu machen. Allerdings muss man den Array dann immer manuell wachsen lassen, während er automatisch wächst, wenn man nur :fill-pointer verwendet. Typbeschränkungen sind mit :element-type machbar.
+- aref => Zugriff auf ein Feld des Arrays: (aref my-arr 2)
+- aset => Schreibt in ein Feld des Arrays (wie aref)
+- coerce => Verwandelt z.B. Strings in Listen von characters und umgekehrt.
+Viele der Funktionen, die mit Listen arbeiten, können auch für Arrays verwendet werden, abgesehen von car/cdr, member, substlength, sublis und nconc (logischerweise, da Arrays ja keine Listen sind) und einigen mehr.
+- make-string => Konstruktor für einen String (Vektor von characters), ähnlich wie make-array
+
+*** Hashes ***
+Wie in anderen Sprachen auch sind Hashes (wenn sie gut aufgebaut sind) sehr effizient. Deshalb gibt man ihnen in Lisp meist den Vorzug vor Arrays, alists und property lists.
+*** Hash-Funktionen ***
+- make-hash-table => Konstruiert eine Hashtabelle. Standardmässig verwendet diese eql zum Schlüsselvergleich.
+- gethash => Zugriff auf ein Element der Tabelle (Schlüssel als Parameter): (gethash 'john my-hash).
+- clrhash => Löscht den inhalt einer Hash-Tabelle.
+
+Makros
+======
+Ein Makro ist wie vom Namen her konnotiert eine Abkürzung für grössere Anweisungen. Allerdings können Lisp-Makros viel mehr, da in Lisp Code und Daten dasselbe sind. Es ist eine Art "expandierende Funktion", die seine Argumente _nicht_ evaluiert. Es produziert aus den Argumenten und seinen Anweisungen (welche zusammen vom Lisp-Interpreter nicht verstanden würden) eine evaluierbare Lisp-Form. So z.B. das incf-Makro, das intern (je nach Lisp-Implementierung) nach (setq a (+ a 1)) o.ä. expandiert wird. Auch setf ist ein Makro. Ein Merkmal von setf ist typisch für Makros: Es ist extrem flexibel und kann auch mit komplexen Argumenten (z.B. eben die Feldadressierung von setf) umgehen.
+Es gibt drei Hauptunterschiede zwischen Makros und Funktionen:
+1) Funktionen evaluieren ihre Argumente immer, Makros nie.
+2) Das Resultat einer Funktion kann alles sein, das Resultat eines Makros muss ein gültiger Lisp-Ausdruck sein.
+3) Nachdem ein Makro einen Ausdruck zurückgibt, wird dieser sofort evaluiert. Der Rückgabewert einer Funktion wird nicht evaluiert.
+4) Der Code, welcher im Makro nicht gequoted wird, wird zur sog. "Macro-expansion-time", also vor der eigentlichen Runtime, ausgeführt. 
+
+Man kann eigentlich die Faustregel befolgen, dass wenn man irgendwie die Namen von Variablen braucht, ein Makro benutzen muss.
+Zudem sollte man keine Nebenwirkungen direkt in ein Makro einbauen wie Zuweisungen, I/O u.ä., da die Makroexpansion jederzeit erfolgen kann (man denke an den Compiler, denn der ersetzt das Makro durch seine Expansion, wo dann die Nebeneffekte nicht mehr auftreten können). Natürlich ist es in Ordnung, wenn das Makro in einen Ausdruck expandiert, der Nebeneffekte hat (also gequoted als Resultat).
+
+*** Makro-Funktionen ***
+- defmacro => ähnlich wie defun
+- ppmx (muss geladen werden) => "Pretty Print Macro eXpansion": zeigt, wie das Makro expandiert wird. Die Symbole, die dabei auftauchen wie z.B.  #:G1707 heissen "gensym" und sind garantiert einzigartig, können also vom Benutzer nicht definiert resp. überschrieben werden.
+- ` (mit , wird dann das Quoting für das jeweils nächste Symbol oder Ausdruck aufgehoben) => Das Backquote wird hier nur ehrenhalber genannt, da es in Makros einfach sehr häufig zum Einsatz kommt, weil meist das Verhältnis von gequotetem Text zu einzusetzendem Text (die Parameter- resp. Variablennamen- und Werte) grösser ist. Mit ,@ wird dabei im übrigen eine Liste ohne Klammern (also die Elemente nacheinander) angezeigt (splicing).
+
+*** Makro-Beispiele ***
+Ein verbessertes incf, mit dem beliebige Beträge erhöht werden können (anstatt des Betrages darf natürlich auch ein beliebiger Ausdruck stehen, der zu einer Zahl evaluiert).
+(defmacro my-incf (var &optional (amount 1))
+	(list 'setq var (list '+ var amount)))
+Warum kann man dies nur als Makro realisieren? Weil der Variablenname als Argument nicht evaluiert werden darf (sonst wird er zur Zahl und im Körper der Funktion wird eine lokal Variable var definiert:
+(defun faulty-incf (var &optional (amount 1))
+	(setq var (+ var amount)))
+Die Variable, die erhöht werden sollte, wird nie verändert, alles passiert funktionslokal...
+Verzweifelt kann man noch dies versuchen:
+(defun faulty-incf2 (var)
+	(set var (+ (symbol-value var) 1)))
+diese würde so aufgerufen: (faulty-incf2 'a). Da set eine (sehr alte) Funktion ist, evaluiert sie ihre Parameter, deshalb muss der Variablenname gequotet werden, um nicht zu ihrem Wert evaluiert zu werden. Hier nutzt man ebendies aus. Um den Wert der Variablen zu erhalten, nimmt man dann symbol-value. So gut dies funktioniert mit globalen (special) Variablen, es funktioniert nicht mit lexikalischen Variablen (Funktionsparametern, let-Bindings u.ä.). Da bekanntlich globale Variablen in der "value cell" des sie benennenden Symboles liegen, klappt das wie gesagt für diese Variablen. Lexikalisch bildet die Funktion aber einen eigenen Kontext und hat deshalb keinen Zugriff auf eine lexikalische Variable (z.B. einen Parameter) der sie aufrufenden Funktion. Bei Makros klappt dies problemlos, da diese zu einem Lisp-Ausdruck expandiert werden, der ganz einfach im gleichen lexikalischen Kontext ausgeführt wird.
+
+Hier ein schönes Beispiel mit Backquotes und Splicing:
+(defmacro variable-chain (&rest vars)
+	`(progn
+		,@(do ((v vars (rest v))
+			     (res nil))
+			  	((null (rest v)) (reverse res))
+					(push `(setf ,(first v)
+			  		 	 ',(second v))
+			  		res))))
+
+Hier ein Beispiel, wie mittels Makros die Sprache erweitert werden kann um das while-Konstrukt:
+(defmacro while (test &body body)
+	`(do ()
+		((not ,test))
+			,@body))
+
+Makro-Spezialitäten / Zu beachten
+=================================
+- Anaphoric macro => Anaphorische Makros werden diejenigen Makros genannt, welche Variablen definieren, die dann auch beim Aufruf des Makros im Code selber benutzt/referenziert werden können. (Anaphorisch => Ein Satzsubjekt bezieht sich referentiell auf das Subjekt eines anderen Satzes).
+- Variable capturing => Dies kann sowohl ein Bug (ungewollt) wie auch ein Feature (siehe anaphoric macro) sein. Man muss aufpassen, dass man keine lexikalischen Variablennamen wie x o.ä. verwendet, da diese Variablen mit demselben Namen "capturen" kann, wenn z.B. beim Makroaufruf auch ein x benutzt wird (dann wird die Variable des Makros referenziert). Man kann die Funktion gensym verwenden, um eindeutige Variablennamen (auch für rekursive Makros) zu erhalten.
+Zu beiden Punkten gibt es Beispiel auf S. 347-350 im "Land of Lisp".
+
+Special Functions
+=================
+Neben Funktionen und Makros gibt es noch Spezialfunktionen, diese sind: setq, if, let und block und noch einige mehr. Special functions sind die "lowest level building blocks" von Common Lisp. Sie sind zuständig für Dinge wie Zuweisungen (assignment), Gültigkeitsbereiche (scoping), grundsätzliche Kontrollstrukturen wie Blöcke (blocks) und Schleifen (loops). Wie Makros evaluieren sie _nicht_ ihre Argumente, anders als Makros aber geben sie keinen evaluierbaren Lisp-Ausdruck zurück, sondern einen Rückgabewert wie normale Funktionen.
+Special functions können nicht definiert werden, da sie Kernelemente der Sprache sind.
+Man könnte nun also das obige Beispiel-Makro tatsächlich doch ohne Makro realisieren, indem man Funktionen und special functions kombiniert, bis das gewünschte Verhalten (Argumente nicht evaluiert, Nebeneffekte etc.) erreicht ist.
+
+Optimierung / Tuning
+====================
+- Tail Call Optimization => siehe entsprechenden Punkt bei den Rekursionen
+- Memoization: Eine Technik, mit der die Ergebnisse von Funktionsaufrufen gespeichert/gecached werden (möglich, da in funktionalen Sprachen die Ergebnisse von Funktionen immer von ihren Argumenten und keinen Nebeneffekten abhängen), dies wird mittels Closures gemacht. Dazu wird die ursprüngliche Funktion belassen, aber es wird zusätzlich ein lexikalischer Kontex erstellt, in welchem ein "Wrapper" für die Funktion eingerichtet wird. Dieser prüft, ob in der lexikalischen Variablen schon ein Ergebnis für die gegebenen Argumente vorhanden ist. Falls ja, wird dieses direkt zurückgegeben. Falls nicht, wird die ursprüngliche Version der Funktion (diese wurde am Anfang des lexikalischen Kontext gespeichert) aufgerufen und das Resultat in der lexikalischen Variable gespeichert. Dies kann enorme Geschwindigkeitsverbesserungen bringen, ist an sich aber nicht mehr funktional (Tradeoff).
+Beispiel Memoization:
+(let ((old-game-tree (symbol-function 'game-tree))
+	    (previous (make-hash-table :test #'equalp)))
+	(defun game-tree (&rest rest)
+		(or (gethash rest previous)
+		  (setf (gethash rest previous)
+		  	(setf (gethash rest previous) (apply old-game-tree rest))))))
+Bemerkung: Der hier verwendete Äquivalenztest der Hash-Tabelle (equalp) ist nicht effizient und nur für kleinere Listen praktisch. Hat man normale Funktionen ohne Listenargumente kann man die Hash-Table unverändert nehmen. Hat man grössere Listen (oder Bäume), so kann man die Funktion anpassen => siehe S. 330 "Land of Lisp".
+- Lazy evaluation => Code wird erst ausgeführt, wenn er benötigt wird, die Ergebnisse werden gespeichert, damit er nicht jedes mal neu ausgeführt werden muss. Dies kann wie bei Lisp üblich mit Code und Daten (z.B. lazy lists) gemacht werden. Siehe lazy.lisp für eine einfache aber produktionsreife Implementierung.

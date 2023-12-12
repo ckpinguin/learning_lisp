@@ -1,0 +1,6 @@
+Aufruf:
+(load "dice_of_doom_4")
+(serve #'dod-request-handler)
+
+Dann im Browser:
+http://localhost:8080/game.html
